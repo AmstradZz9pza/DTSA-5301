@@ -1,0 +1,80 @@
+---
+title: "NYPD Shooting Incident Data (Historic)"
+date: '2022-03-15'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Read data from website
+
+```{r read_data, message=FALSE}
+library(tidyverse)
+url <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+data <- read_csv(url)
+```
+
+## Initial Summary
+
+```{r initial_summary, message=FALSE}
+head(data)
+```
+
+## Tidy data
+
+1. select specific columns
+2. convert date to Date type
+
+```{r tidy_data, message=FALSE}
+data <- data %>% select(OCCUR_DATE,BORO,LOCATION_DESC,PERP_AGE_GROUP,PERP_SEX,PERP_RACE,VIC_AGE_GROUP,VIC_SEX,VIC_RACE) %>% mutate(OCCUR_DATE = as.Date(OCCUR_DATE,"%m/%d/%y"))
+head(data)
+```
+
+## Analyze data
+
+Plot count of shootings by date.
+
+```{r plot_shooting_counts, message=FALSE}
+shootings_by_date <- data %>% group_by(OCCUR_DATE) %>% summarise(COUNT = n())
+ggplot( data = shootings_by_date, aes( OCCUR_DATE, COUNT )) +
+geom_line() +
+xlab("Date") + ylab("Shooting incidences")
+```
+
+Maybe separate by Borough and add moving averages to visualize.
+
+```{r plot_shooting_counts_by_borough, message=FALSE}
+shootings_by_borough <- data %>% group_by(OCCUR_DATE,BORO) %>% summarise(COUNT = n())
+ggplot( data = shootings_by_borough, aes( OCCUR_DATE, COUNT, group=BORO )) +
+geom_point(aes(color=BORO)) + geom_smooth(aes(color=BORO)) +
+xlab("Date") + ylab("Shooting incidences")
+```
+
+So this shows that the incidences in Staten Island are low compared to the other Boroughs.  And also Brooklyn and the Bronx being comparatively high.
+
+Hmmm... what's that date in July 2020 with a high count?
+
+```{r find_high_count, message=FALSE}
+filter(shootings_by_date, COUNT > 150)
+```
+
+A quick search on July 5th 2020 pulls up this article: 
+https://nypost.com/2020/07/05/violent-july-4th-weekend-sees-at-least-10-shot-2-dead-in-nyc/
+which describes an unusually high holiday weekend of shootings.
+
+## Model fitting
+
+The data looks like it tracks with date of the year.  Let's try to fit a sine of period one year.  
+
+```{r fit_model, message=FALSE}
+ggplot( data = shootings_by_date, aes( x=(julian(OCCUR_DATE)%%365)/365, y=COUNT )) +
+  geom_point() +
+  geom_smooth(method="lm", formula= y ~ sin(2*pi*x)+cos(2*pi*x) ) +
+  xlab("Fraction of year") + ylab("Shooting incidences")
+```
+
+## Bias
+
+The data shown here is likely only data documented by police reports.  It is probable that shootings occur that go unreported.  It maybe that Staten Island is under reported but it is more likely that areas with already high shooting rates are under reported.
